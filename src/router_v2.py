@@ -176,7 +176,7 @@ def git_commit_and_push(file_path: str, commit_message: str):
         current_branch = branch_result.stdout.strip()
 
         subprocess.run(["git", "push", "origin", current_branch], check=True, capture_output=True)
-        print("🎉 Successfully pushed Phase 1 completion to GitHub!")
+        print("Successfully pushed ")
     except subprocess.CalledProcessError as e:
         print(f" Git automation failed:\n{e.stderr.decode('utf-8').strip()}")
     except Exception as e:

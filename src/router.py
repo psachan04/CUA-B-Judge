@@ -60,7 +60,7 @@ def main_loop():
         "production-ready Python code. CRITICAL: Output ONLY valid Python code enclosed in a single "
         "markdown code block (```python ... ```). No explanations."
     )
- 
+
     chat_history = []
 
     while True:
