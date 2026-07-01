@@ -86,7 +86,11 @@ client = openai.OpenAI(
 ORCHESTRATOR_SYS_PROMPT = """You are the Principal Systems Architect for a Python multi-agent framework. 
             Engage with the human developer. If their request is ambiguous, ASK clarifying questions. 
             If the request is clear, draft a strict, edge-case-proof technical specification 
-            that a subordinate coding agent can follow to write the code."""
+            that a subordinate coding agent can follow to write the code.
+
+            CRITICAL: At the very end of your specification, include a short, lowercase, hyphenated slug 
+            representing the task inside tags, exactly like this: <task_slug>your-task-name</task_slug>"""
+
 WORKER_SYS_PROMPT = """You are an automated code generation assistant. You receive specifications and output 
         production-ready Python code. CRITICAL: Output ONLY valid Python code enclosed in a single 
         markdown code block (```python ... ```). No explanations."""
@@ -156,6 +160,28 @@ def execute_worker_task(task_name: str, specification: str) -> dict | None:
         print("Cleaning up workspace...")
         manager.teardown(task_name)
 
+
+def git_commit_and_push(file_path: str, commit_message: str):
+    """Programmatically stages, commits, and pushes a file to GitHub main repository."""
+    try:
+        print(f"\n[Git] Staging {file_path}...")
+        subprocess.run(["git", "add", file_path], check=True, capture_output=True)
+
+        print(f"[Git] Committing changes...")
+        subprocess.run(["git", "commit", "-m", commit_message], check=True, capture_output=True)
+
+        print(f"[Git] Pushing to GitHub (origin)...")
+        # Grabs the currently active branch name dynamically
+        branch_result = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True, check=True)
+        current_branch = branch_result.stdout.strip()
+
+        subprocess.run(["git", "push", "origin", current_branch], check=True, capture_output=True)
+        print("🎉 Successfully pushed Phase 1 completion to GitHub!")
+    except subprocess.CalledProcessError as e:
+        print(f" Git automation failed:\n{e.stderr.decode('utf-8').strip()}")
+    except Exception as e:
+        print(f" Unexpected error during version control: {e}")
+
 if __name__ == "__main__":
     print("===================================================")
     print(" BJudge Agentic Workspace v2 (Type 'exit' to quit)")
@@ -188,18 +214,32 @@ if __name__ == "__main__":
                 continue
 
             last_spec = orchestrator_history[-1]["content"]
-            task_name = "auto-task"  # You can make this dynamic later
 
-            print(f"\n[Worker Coder is spinning up workspace and writing code...]")
+            # 1. Dynamically extract the task name from the Orchestrator's response
+            slug_match = re.search(r"<task_slug>(.*?)</task_slug>", last_spec)
+            if slug_match and slug_match.group(1).strip():
+                task_name = slug_match.group(1).strip().lower()
+            else:
+                # Fallback: ask you directly if the AI forgot to include the tag
+                task_name = input("Enter a short name for this task branch (e.g., eval-prompt) > ").strip()
+                if not task_name:
+                    task_name = "auto-task-fallback"
+
+            print(f"\n[Worker Coder is spinning up workspace '{task_name}' and writing code...]")
             result = execute_worker_task(task_name, last_spec)
 
             if result:
-                print("\n Validation succeeded! Code compiled in isolated workspace.")
+                print("\n Validate succeeded! Code compiled in isolated workspace.")
                 final_path = input("Enter final file path to save (e.g., src/trajectory_models.py) or ENTER to skip > ")
                 if final_path.strip():
                     try:
                         pathlib.Path(final_path).write_text(result["code_snapshot"], encoding="utf-8")
                         print(f" Success!")
+
+                        # Dynamic automated git deployment message using our task name
+                        dynamic_message = f"feat: automatically implement and validate {task_name}"
+                        git_commit_and_push(final_path, dynamic_message)
+
                     except Exception as e:
                         print(f" Error saving final file: {e}")
             else:

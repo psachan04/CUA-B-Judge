@@ -64,11 +64,24 @@ def main_loop():
     chat_history = []
 
     while True:
-        user_input = input("\n[You] > ")
+        print(
+            "\n[You] > (Paste your prompt. When finished, type 'END' on a new blank line and press Enter. Type 'exit' to quit.)")
+        lines = []
+        while True:
+            try:
+                line = input()
+                if line.strip() == 'END':
+                    break
+                lines.append(line)
+            except EOFError:
+                break
+
+        user_input = "\n".join(lines).strip()
+
         if user_input.lower() in ['exit', 'quit']:
             print("Shutting down BJudge Agentic Loop. Goodbye!")
             break
-        if not user_input.strip():
+        if not user_input:
             continue
 
         # 1. Talk to Orchestrator
