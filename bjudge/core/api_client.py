@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from openai import OpenAI
 
-from src.config import (
+from bjudge.config import (
     OPENROUTER_BASE_URL,
     OPENROUTER_API_KEY,
     ORCHESTRATOR_MODEL,

@@ -14,8 +14,8 @@ The evaluator enforces the <thoughts>/<answer> output schema:
 import re
 from typing import List, Optional
 
-from src.config import ORCHESTRATOR_MODEL, ORCHESTRATOR_MAX_TOKENS
-from src.api_client import call_text_llm, parse_thoughts, parse_answer_int
+from bjudge.config import ORCHESTRATOR_MODEL, ORCHESTRATOR_MAX_TOKENS
+from bjudge.core.api_client import call_text_llm, parse_thoughts, parse_answer_int
 
 
 # ---------------------------------------------------------------------------

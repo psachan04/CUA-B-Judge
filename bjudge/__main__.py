@@ -1,18 +1,18 @@
 """
 BJudge Pipeline — CLI Entry Point
 
-Command-line interface for running the BJudge evaluation pipeline.
+Run with: python -m bjudge
 
 Usage:
     # Live mode (executes real PyAutoGUI actions):
-    uv run python src/main.py \\
+    python -m bjudge \\
         --objective "Open Settings and enable Dark Mode" \\
         --actions actions.json \\
         --mode live \\
         --output results.json
 
     # Replay mode (processes pre-recorded screenshots):
-    uv run python src/main.py \\
+    python -m bjudge \\
         --objective "Open Settings and enable Dark Mode" \\
         --replay replay_data.json \\
         --mode replay \\
@@ -22,18 +22,14 @@ Usage:
 import argparse
 import json
 import sys
-import os
 
-# Ensure the project root is on the path for src imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.config import (
+from bjudge.config import (
     ORCHESTRATOR_MODEL,
     ORCHESTRATOR_MAX_TOKENS,
     VISUAL_OUTPUTS_DIR,
     OPENROUTER_API_KEY,
 )
-from src.orchestrator import run_pipeline, save_results
+from bjudge.pipeline.orchestrator import run_pipeline, save_results
 
 
 def main() -> None:
@@ -43,13 +39,13 @@ def main() -> None:
         epilog="""
 Examples:
   # Run with 2 live rollouts from an actions JSON file:
-  uv run python src/main.py \\
+  python -m bjudge \\
       --objective "Open Settings and enable Dark Mode" \\
       --actions data/actions.json \\
       --mode live
 
   # Replay pre-recorded rollouts:
-  uv run python src/main.py \\
+  python -m bjudge \\
       --objective "Submit the contact form" \\
       --replay data/replay.json \\
       --mode replay \\
@@ -78,7 +74,7 @@ Examples:
         default=None,
         help=(
             "Path to a JSON file containing action sequences for LIVE mode. "
-            "Format: [[\"pyautogui.click(x,y)\", ...], [...]]"
+            'Format: [["pyautogui.click(x,y)", ...], [...]]'
         ),
     )
 

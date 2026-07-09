@@ -27,27 +27,27 @@ import os
 import time
 from typing import List, Optional, Literal, Tuple
 
-from src.config import (
+from bjudge.config import (
     POST_ACTION_DELAY,
     ORCHESTRATOR_MODEL,
     ORCHESTRATOR_MAX_TOKENS,
     VISUAL_OUTPUTS_DIR,
 )
-from src.trajectory_models import (
+from bjudge.models import (
     Step,
     Trajectory,
     RolloutResult,
     PipelineResult,
 )
-from src.visual_engine import (
+from bjudge.vision.engine import (
     capture_screenshot,
     annotate_and_crop,
 )
-from src.narrative_generator import (
+from bjudge.narrative.generator import (
     generate_trajectory_narrative,
     generate_narrative_from_paths,
 )
-from src.evaluator import evaluate
+from bjudge.evaluation.comparator import evaluate
 
 
 ExecutionMode = Literal["live", "replay"]

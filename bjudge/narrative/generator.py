@@ -17,9 +17,9 @@ Behavior Narrative string for the full trajectory.
 
 from typing import List, Optional
 
-from src.config import ORCHESTRATOR_MODEL, ORCHESTRATOR_MAX_TOKENS
-from src.api_client import call_vlm, parse_thoughts, parse_answer_facts
-from src.trajectory_models import (
+from bjudge.config import ORCHESTRATOR_MODEL, ORCHESTRATOR_MAX_TOKENS
+from bjudge.core.api_client import call_vlm, parse_thoughts, parse_answer_facts
+from bjudge.models import (
     Step,
     StepNarrative,
     Trajectory,

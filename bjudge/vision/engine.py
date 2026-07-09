@@ -19,7 +19,7 @@ from typing import Tuple, Optional, Literal
 
 from PIL import Image, ImageDraw, ImageFont
 
-from src.config import (
+from bjudge.config import (
     RETINA_SCALE_FACTOR,
     CROP_SIZE,
     MARKER_RADIUS,
@@ -30,8 +30,8 @@ from src.config import (
     POST_ACTION_DELAY,
     VISUAL_OUTPUTS_DIR,
 )
-from src.action_marker import draw_action_marker
-from src.zoom_crop import zoom_crop
+from bjudge.vision.markers import draw_action_marker
+from bjudge.vision.crop import zoom_crop
 
 
 # Type alias for supported action types

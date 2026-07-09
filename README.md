@@ -13,8 +13,8 @@ Traditional Computer-Use Agents (CUAs) are brittle on long-horizon tasks — a s
 │                    BJudge Pipeline                       │
 │                                                         │
 │  ┌──────────┐   ┌──────────────┐   ┌────────────────┐  │
-│  │  Visual   │──▶│  Narrative   │──▶│  Comparative   │  │
-│  │  Engine   │   │  Generator   │   │  Evaluator     │  │
+│  │  Vision   │──▶│  Narrative   │──▶│  Evaluation    │  │
+│  │  Engine   │   │  Generator   │   │  Comparator    │  │
 │  │ Module A  │   │  Module B    │   │  Phase 3       │  │
 │  └──────────┘   └──────────────┘   └────────────────┘  │
 │       │                │                    │           │
@@ -26,13 +26,40 @@ Traditional Computer-Use Agents (CUAs) are brittle on long-horizon tasks — a s
 └─────────────────────────────────────────────────────────┘
 ```
 
-The pipeline operates in three stages:
+## Project Structure
 
-1. **Visual Engine** (`visual_engine.py`) — Captures desktop screenshots, applies Retina ×2 coordinate scaling, overlays action-type markers (click/move/drag), and extracts boundary-clamped 200×200 focus crops.
+```
+bjudge/                        # Main Python package
+├── __init__.py                # Package root
+├── __main__.py                # CLI entry point (python -m bjudge)
+├── config.py                  # Centralized constants & environment
+├── models.py                  # Dataclasses (Step, Trajectory, RolloutResult, etc.)
+│
+├── core/                      # Infrastructure
+│   └── api_client.py          # OpenRouter multimodal API client + response parsers
+│
+├── vision/                    # Module A — visual pre-processing
+│   ├── engine.py              # Full capture → scale → mark → crop pipeline
+│   ├── markers.py             # Pillow circle/label action marker drawing
+│   └── crop.py                # 200×200 boundary-clamped zoom crop
+│
+├── narrative/                 # Module B — VLM fact extraction
+│   └── generator.py           # Step-level & trajectory-level narrative generation
+│
+├── evaluation/                # Phase 3 — trajectory comparison
+│   └── comparator.py          # MCQ tournament evaluator
+│
+└── pipeline/                  # Orchestration
+    └── orchestrator.py        # Top-level N-rollout controller + result serialization
 
-2. **Narrative Generator** (`narrative_generator.py`) — Sends before/after screenshot pairs to a Vision-Language Model to extract objective environmental state changes as structured facts.
+tools/                         # Dev utilities (not part of pipeline)
+└── workspace.py               # Git worktree sandbox for code generation
 
-3. **Comparative Evaluator** (`evaluator.py`) — Stacks N trajectory narratives as MCQ candidates and selects the best execution path via structured `<thoughts>`/`<answer>` reasoning.
+data/
+└── visual_outputs/            # Generated screenshots and crops
+
+paper/                         # Reference paper (arXiv:2510.02250)
+```
 
 ## Models (OpenRouter)
 
@@ -40,23 +67,6 @@ The pipeline operates in three stages:
 |------|-------|---------|
 | Orchestrator / Judge | `z-ai/glm-5.2` | Narrative extraction, trajectory evaluation |
 | Worker / Coder | `deepseek/deepseek-v4-flash` | Code generation tasks |
-
-## Project Structure
-
-```
-src/
-├── config.py              # Centralized constants & environment
-├── api_client.py          # OpenRouter multimodal API client
-├── visual_engine.py       # Module A — capture → scale → mark → crop
-├── action_marker.py       # Pillow circle/label drawer
-├── zoom_crop.py           # 200×200 boundary-clamped crop
-├── narrative_generator.py # Module B — VLM fact extraction
-├── trajectory_models.py   # Dataclasses (Step, Trajectory, RolloutResult, etc.)
-├── evaluator.py           # Phase 3 — MCQ comparative evaluator
-├── orchestrator.py        # Top-level pipeline controller
-├── main.py                # CLI entry point
-└── agent_workspace.py     # Git worktree sandbox for code generation
-```
 
 ## Quick Start
 
@@ -68,13 +78,13 @@ uv sync
 export OPENROUTER_API_KEY='your-key-here'
 
 # 3. Run in replay mode (pre-recorded screenshots)
-uv run python src/main.py \
+python -m bjudge \
     --objective "Open Settings and enable Dark Mode" \
     --replay data/replay.json \
     --mode replay
 
 # 4. Run in live mode (real desktop actions)
-uv run python src/main.py \
+python -m bjudge \
     --objective "Open Settings and enable Dark Mode" \
     --actions data/actions.json \
     --mode live
