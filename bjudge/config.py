@@ -18,7 +18,14 @@ OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 # ---------------------------------------------------------------------------
 # Model Slugs
 # ---------------------------------------------------------------------------
+# Vision model — must support image inputs (multimodal).
+# Used by the narrative generator to analyze before/after screenshots.
+VISION_MODEL: str = "google/gemini-2.5-flash"
+
+# Orchestrator / evaluator model — text-only, used for comparative evaluation.
 ORCHESTRATOR_MODEL: str = "z-ai/glm-5.2"
+
+# Worker model for code generation tasks.
 WORKER_MODEL: str = "deepseek/deepseek-v4-flash"
 
 # GLM-5.2 requires an explicit max_tokens override to pass OpenRouter

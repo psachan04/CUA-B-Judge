@@ -30,6 +30,7 @@ from typing import List, Optional, Literal, Tuple
 from bjudge.config import (
     POST_ACTION_DELAY,
     ORCHESTRATOR_MODEL,
+    VISION_MODEL,
     ORCHESTRATOR_MAX_TOKENS,
     VISUAL_OUTPUTS_DIR,
 )
@@ -136,7 +137,7 @@ def run_live_rollout(
     rollout_id: int,
     action_sequence: List[str],
     output_dir: str,
-    model: str = ORCHESTRATOR_MODEL,
+    model: str = VISION_MODEL,
     max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
 ) -> RolloutResult:
     """
@@ -232,7 +233,7 @@ def run_live_rollout(
 def run_replay_rollout(
     rollout_id: int,
     steps_data: List[dict],
-    model: str = ORCHESTRATOR_MODEL,
+    model: str = VISION_MODEL,
     max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
 ) -> RolloutResult:
     """
@@ -270,7 +271,8 @@ def run_pipeline(
     replay_data: Optional[List[List[dict]]] = None,
     mode: ExecutionMode = "replay",
     output_dir: str = VISUAL_OUTPUTS_DIR,
-    model: str = ORCHESTRATOR_MODEL,
+    vision_model: str = VISION_MODEL,
+    eval_model: str = ORCHESTRATOR_MODEL,
     max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
 ) -> PipelineResult:
     """
@@ -317,11 +319,11 @@ def run_pipeline(
                 rollout_id=i,
                 action_sequence=actions,
                 output_dir=output_dir,
-                model=model,
+                model=vision_model,
                 max_tokens=max_tokens,
             )
             rollout_results.append(result)
-            print(f"  ✓ Rollout {i} complete: {len(actions)} steps\n")
+            print(f" Rollout {i} complete: {len(actions)} steps\n")
 
     elif mode == "replay":
         if not replay_data:
@@ -335,7 +337,7 @@ def run_pipeline(
             result = run_replay_rollout(
                 rollout_id=i,
                 steps_data=steps_data,
-                model=model,
+                model=vision_model,
                 max_tokens=max_tokens,
             )
             rollout_results.append(result)
@@ -363,7 +365,7 @@ def run_pipeline(
     eval_result = evaluate(
         objective=objective,
         narratives=narratives,
-        model=model,
+        model=eval_model,
         max_tokens=max_tokens,
     )
 

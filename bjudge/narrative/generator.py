@@ -17,7 +17,7 @@ Behavior Narrative string for the full trajectory.
 
 from typing import List, Optional
 
-from bjudge.config import ORCHESTRATOR_MODEL, ORCHESTRATOR_MAX_TOKENS
+from bjudge.config import VISION_MODEL, ORCHESTRATOR_MAX_TOKENS
 from bjudge.core.api_client import call_vlm, parse_thoughts, parse_answer_facts
 from bjudge.models import (
     Step,
@@ -67,7 +67,7 @@ def generate_step_narrative(
     before_screenshot_path: str,
     action_command: str,
     after_crop_path: str,
-    model: str = ORCHESTRATOR_MODEL,
+    model: str = VISION_MODEL,
     max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
     step_number: int = 0,
 ) -> StepNarrative:
@@ -120,7 +120,7 @@ def generate_step_narrative(
 
 def generate_trajectory_narrative(
     trajectory: Trajectory,
-    model: str = ORCHESTRATOR_MODEL,
+    model: str = VISION_MODEL,
     max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
 ) -> RolloutResult:
     """
@@ -190,7 +190,7 @@ def generate_trajectory_narrative(
 def generate_narrative_from_paths(
     rollout_id: int,
     steps_data: List[dict],
-    model: str = ORCHESTRATOR_MODEL,
+    model: str = VISION_MODEL,
     max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
 ) -> RolloutResult:
     """

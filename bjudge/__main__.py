@@ -25,6 +25,7 @@ import sys
 
 from bjudge.config import (
     ORCHESTRATOR_MODEL,
+    VISION_MODEL,
     ORCHESTRATOR_MAX_TOKENS,
     VISUAL_OUTPUTS_DIR,
     OPENROUTER_API_KEY,
@@ -103,17 +104,24 @@ Examples:
     )
 
     parser.add_argument(
-        "--model",
+        "--vision-model",
+        type=str,
+        default=VISION_MODEL,
+        help=f"Vision model slug for screenshot narrative generation (must support image input). (default: {VISION_MODEL})",
+    )
+
+    parser.add_argument(
+        "--eval-model",
         type=str,
         default=ORCHESTRATOR_MODEL,
-        help=f"VLM model slug for narrative generation and evaluation. (default: {ORCHESTRATOR_MODEL})",
+        help=f"Text model slug for comparative trajectory evaluation. (default: {ORCHESTRATOR_MODEL})",
     )
 
     parser.add_argument(
         "--max-tokens",
         type=int,
         default=ORCHESTRATOR_MAX_TOKENS,
-        help=f"Maximum tokens per VLM call. (default: {ORCHESTRATOR_MAX_TOKENS})",
+        help=f"Maximum tokens per LLM call. (default: {ORCHESTRATOR_MAX_TOKENS})",
     )
 
     args = parser.parse_args()
@@ -174,7 +182,8 @@ Examples:
         replay_data=replay_data,
         mode=args.mode,
         output_dir=args.output_dir,
-        model=args.model,
+        vision_model=args.vision_model,
+        eval_model=args.eval_model,
         max_tokens=args.max_tokens,
     )
 
