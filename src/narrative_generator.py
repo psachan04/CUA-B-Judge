@@ -1,150 +1,256 @@
 """
-UI Action Marker Image Annotation
+BJudge Pipeline — Narrative Generator (Module B)
 
-Annotates a base image with a bright red circular marker surrounded by a
-2-pixel white contrasting outline to simulate a UI interaction (e.g., a
-mouse click) at a specific coordinate.
+Implements the transition fact extraction function:
+
+    ϕᵢ = G(sᵢ, aᵢ, sᵢ₊₁)
+
+For each step in a trajectory, this module sends the annotated "before"
+screenshot, the action command string, and the zoomed "after" crop to the
+orchestrator VLM (z-ai/glm-5.2) via OpenRouter. The VLM returns structured
+<thoughts>/<answer> blocks describing the precise environmental state changes
+induced by the action.
+
+The module then aggregates per-step facts into a single chronological
+Behavior Narrative string for the full trajectory.
 """
 
-from PIL import Image, ImageDraw, UnidentifiedImageError
+from typing import List, Optional
+
+from src.config import ORCHESTRATOR_MODEL, ORCHESTRATOR_MAX_TOKENS
+from src.api_client import call_vlm, parse_thoughts, parse_answer_facts
+from src.trajectory_models import (
+    Step,
+    StepNarrative,
+    Trajectory,
+    RolloutResult,
+)
 
 
-def draw_action_marker(
-    base_image_path: str,
-    click_coord: tuple,
-    output_path: str,
-    marker_radius: int = 8,
-) -> bool:
+# ---------------------------------------------------------------------------
+# System Prompts
+# ---------------------------------------------------------------------------
+
+STEP_NARRATIVE_SYSTEM_PROMPT: str = """You are a senior workspace visualization utility and a precise UI state-change observer.
+
+You will be shown:
+1. A text description of a programmatic GUI action (PyAutoGUI syntax).
+2. An annotated screenshot taken BEFORE the action was executed, with the target coordinates marked by a colored circle.
+3. A zoomed 200×200 crop of the area around the action target taken AFTER the action was executed.
+
+Your task is to identify and report the EXACT environmental state changes that occurred as a direct result of this action.
+
+You MUST structure your response using these EXACT block delimiters:
+
+<thoughts>
+Provide your step-level reasoning here. Describe what you observe in the before screenshot, identify the UI element at the marked coordinates, and analyze what changed in the after crop. Be thorough but concise.
+</thoughts>
+
+<answer>
+- [First precise environmental change]
+- [Second precise environmental change]
+- [Additional changes as needed]
+</answer>
+
+CRITICAL RULES:
+- The <answer> block must contain ONLY a markdown unordered list of objective, factual environmental state changes.
+- Do NOT include system clock changes, cursor position changes, or other incidental OS state noise.
+- Do NOT include speculative or assumed changes — only report what is directly observable.
+- Each bullet point must be a complete, standalone factual statement."""
+
+
+# ---------------------------------------------------------------------------
+# Per-Step Narrative Generation
+# ---------------------------------------------------------------------------
+
+def generate_step_narrative(
+    before_screenshot_path: str,
+    action_command: str,
+    after_crop_path: str,
+    model: str = ORCHESTRATOR_MODEL,
+    max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
+    step_number: int = 0,
+) -> StepNarrative:
     """
-    Draw a bright red circular action marker with a white contrasting outline
-    on a base image at the specified click coordinate.
+    Generate a narrative for a single action step using the VLM.
 
-    The marker consists of two concentric circles:
-      - Outer circle: White (255, 255, 255, 255) with radius = marker_radius
-      - Inner circle: Bright Red (255, 0, 0, 255) with radius = marker_radius - 2
-
-    This ensures the marker is visible on both dark and light backgrounds.
+    Sends a multimodal prompt with the before screenshot, the action
+    description, and the after crop to extract transition facts.
 
     Args:
-        base_image_path: Path to the input image file.
-        click_coord: A tuple or list of exactly two integers (x, y) representing
-            the click coordinate.
-        output_path: Path where the annotated image will be saved.
-        marker_radius: Radius of the outer marker circle in pixels. Must be at
-            least 3 to accommodate the 2-pixel contrasting outline. Defaults to 8.
+        before_screenshot_path: Path to the annotated "before" screenshot.
+        action_command: The PyAutoGUI action string (e.g., "pyautogui.click(500, 300)").
+        after_crop_path: Path to the 200×200 zoomed crop taken after the action.
+        model: VLM model slug for the API call.
+        max_tokens: Maximum response tokens.
+        step_number: The ordinal step number in the trajectory.
 
     Returns:
-        True if the image was successfully annotated and saved.
-        False if a runtime I/O error occurred (file not found, invalid image
-        format, permission error, etc.).
-
-    Raises:
-        ValueError: If any input argument is invalid (programmer error).
+        A StepNarrative dataclass with parsed thoughts, facts, and raw response.
     """
+    text_content = (
+        f"Action executed: {action_command}\n\n"
+        f"The first image is the annotated BEFORE screenshot showing the "
+        f"target coordinates. The second image is the zoomed AFTER crop "
+        f"showing the result of the action."
+    )
 
-    # 1. Input Validation (Programmer Errors — raise ValueError)
+    raw_response = call_vlm(
+        model=model,
+        system_prompt=STEP_NARRATIVE_SYSTEM_PROMPT,
+        text_content=text_content,
+        image_paths=[before_screenshot_path, after_crop_path],
+        max_tokens=max_tokens,
+    )
 
-    if not isinstance(base_image_path, str) or len(base_image_path) == 0:
-        raise ValueError("base_image_path must be a non-empty string")
+    thoughts = parse_thoughts(raw_response)
+    facts = parse_answer_facts(raw_response)
 
-    if not isinstance(output_path, str) or len(output_path) == 0:
-        raise ValueError("output_path must be a non-empty string")
+    return StepNarrative(
+        step_number=step_number,
+        thoughts=thoughts,
+        facts=facts,
+        raw_response=raw_response,
+    )
 
-    if not isinstance(click_coord, (tuple, list)) or len(click_coord) != 2:
-        raise ValueError("click_coord must be a tuple of two integers (x, y)")
 
-    x, y = click_coord
-    if (
-        not isinstance(x, int)
-        or isinstance(x, bool)
-        or not isinstance(y, int)
-        or isinstance(y, bool)
-    ):
-        raise ValueError("click_coord must be a tuple of two integers (x, y)")
+# ---------------------------------------------------------------------------
+# Trajectory-Level Narrative Aggregation
+# ---------------------------------------------------------------------------
 
-    if not isinstance(marker_radius, int) or isinstance(marker_radius, bool):
-        raise ValueError(
-            "marker_radius must be at least 3 to accommodate the contrasting outline"
-        )
+def generate_trajectory_narrative(
+    trajectory: Trajectory,
+    model: str = ORCHESTRATOR_MODEL,
+    max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
+) -> RolloutResult:
+    """
+    Generate a complete Behavior Narrative for an entire trajectory.
 
-    if marker_radius <= 2:
-        raise ValueError(
-            "marker_radius must be at least 3 to accommodate the contrasting outline"
-        )
+    Iterates through each step, calls the VLM for fact extraction, and
+    aggregates the results into a single chronological narrative string.
 
-    # 2. Image Processing (Runtime Errors — return False)
+    Prerequisites:
+        Each Step in the trajectory must have its annotated_image_path and
+        crop_image_path fields populated (by the visual engine).
 
-    try:
-        with Image.open(base_image_path) as img:
-            # Convert to RGBA for consistent color rendering regardless of
-            # the source image's original mode (L, P, CMYK, etc.)
-            img = img.convert("RGBA")
+    Args:
+        trajectory: A Trajectory object with fully processed steps.
+        model: VLM model slug.
+        max_tokens: Maximum tokens per VLM call.
 
-            # Initialize the drawing context
-            draw = ImageDraw.Draw(img)
+    Returns:
+        A RolloutResult containing the trajectory, per-step narratives,
+        and the aggregated behavior narrative string.
+    """
+    step_narratives: List[StepNarrative] = []
+    narrative_lines: List[str] = []
 
-            # Calculate bounding box for the outer circle (white outline)
-            x0_outer = x - marker_radius
-            y0_outer = y - marker_radius
-            x1_outer = x + marker_radius
-            y1_outer = y + marker_radius
-
-            # Calculate bounding box for the inner circle (red fill)
-            inner_radius = marker_radius - 2
-            x0_inner = x - inner_radius
-            y0_inner = y - inner_radius
-            x1_inner = x + inner_radius
-            y1_inner = y + inner_radius
-
-            # Draw outer white circle first (contrasting outline)
-            draw.ellipse(
-                [x0_outer, y0_outer, x1_outer, y1_outer],
-                fill=(255, 255, 255, 255),
+    for step in trajectory.steps:
+        # Validate that visual processing has been done
+        if not step.annotated_image_path or not step.crop_image_path:
+            raise ValueError(
+                f"Step {step.step_number} is missing visual engine outputs. "
+                f"Run the visual engine before narrative generation."
             )
 
-            # Draw inner red circle second (primary marker fill)
-            draw.ellipse(
-                [x0_inner, y0_inner, x1_inner, y1_inner],
-                fill=(255, 0, 0, 255),
-            )
+        sn = generate_step_narrative(
+            before_screenshot_path=step.annotated_image_path,
+            action_command=step.action_description,
+            after_crop_path=step.crop_image_path,
+            model=model,
+            max_tokens=max_tokens,
+            step_number=step.step_number,
+        )
 
-            # Handle JPEG output — JPEG does not support the alpha channel
-            output_lower = output_path.lower()
-            if output_lower.endswith(".jpg") or output_lower.endswith(".jpeg"):
-                img = img.convert("RGB")
+        step_narratives.append(sn)
 
-            # Save the annotated image
-            img.save(output_path)
+        # Store narrative text on the Step object as well
+        facts_text = "; ".join(sn.facts) if sn.facts else "(no observable changes)"
+        step.narrative = facts_text
 
-            return True
+        # Build the aggregated narrative line
+        narrative_lines.append(
+            f"Step {step.step_number} [{step.action_description}]: {facts_text}"
+        )
 
-    except (FileNotFoundError, UnidentifiedImageError, OSError, Exception):
-        return False
+    aggregated_narrative = "\n".join(narrative_lines)
+
+    return RolloutResult(
+        rollout_id=trajectory.rollout_id,
+        trajectory=trajectory,
+        narrative=aggregated_narrative,
+        step_narratives=step_narratives,
+    )
 
 
-# Demonstration block
+# ---------------------------------------------------------------------------
+# Offline / Replay Variant
+# ---------------------------------------------------------------------------
+
+def generate_narrative_from_paths(
+    rollout_id: int,
+    steps_data: List[dict],
+    model: str = ORCHESTRATOR_MODEL,
+    max_tokens: int = ORCHESTRATOR_MAX_TOKENS,
+) -> RolloutResult:
+    """
+    Generate a trajectory narrative from pre-recorded screenshot paths.
+
+    This is the replay mode variant — no live OS interaction needed. Each
+    entry in steps_data must be a dict with keys:
+        - step_number (int)
+        - action_description (str)
+        - before_image_path (str)
+        - after_image_path (str)
+        - annotated_image_path (str)
+        - crop_image_path (str)
+
+    Args:
+        rollout_id: Integer ID for this rollout.
+        steps_data: List of step dictionaries with image paths.
+        model: VLM model slug.
+        max_tokens: Maximum tokens per VLM call.
+
+    Returns:
+        A RolloutResult with the complete behavior narrative.
+    """
+    steps = [
+        Step(
+            step_number=sd["step_number"],
+            before_image_path=sd["before_image_path"],
+            action_description=sd["action_description"],
+            after_image_path=sd["after_image_path"],
+            annotated_image_path=sd["annotated_image_path"],
+            crop_image_path=sd["crop_image_path"],
+        )
+        for sd in steps_data
+    ]
+
+    trajectory = Trajectory(rollout_id=rollout_id, steps=steps)
+    return generate_trajectory_narrative(
+        trajectory=trajectory,
+        model=model,
+        max_tokens=max_tokens,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Demo / Self-Test
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import tempfile
-    import os
-
-    # Create a temporary directory for the demo
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Create a sample base image (100x100, dark background)
-        sample_path = os.path.join(tmpdir, "sample.png")
-        sample_img = Image.new("RGBA", (100, 100), (30, 30, 30, 255))
-        sample_img.save(sample_path)
-
-        # Annotate the sample image
-        output_path = os.path.join(tmpdir, "annotated.png")
-        success = draw_action_marker(
-            base_image_path=sample_path,
-            click_coord=(50, 50),
-            output_path=output_path,
-            marker_radius=8,
-        )
-
-        if success:
-            print(f"Success: Annotated image saved to {output_path}")
-        else:
-            print("Failure: Could not annotate the image.")
+    print("Narrative Generator — Module B")
+    print("=" * 40)
+    print()
+    print("This module requires live OpenRouter API access to run.")
+    print("To test, ensure OPENROUTER_API_KEY is set and provide")
+    print("real screenshot paths.")
+    print()
+    print("Example usage:")
+    print("  from src.narrative_generator import generate_step_narrative")
+    print("  sn = generate_step_narrative(")
+    print('      before_screenshot_path="data/visual_outputs/step1_annotated.png",')
+    print('      action_command="pyautogui.click(500, 300)",')
+    print('      after_crop_path="data/visual_outputs/step1_crop.png",')
+    print("  )")
+    print("  print(sn.facts)")

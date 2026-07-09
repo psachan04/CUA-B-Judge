@@ -1,11 +1,11 @@
 [project]
 name = "cua-b-judge"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "Test-time scaling pipeline for Computer-Use Agents. Generates parallel rollouts, compresses trajectories into VLM behavior narratives, and selects the best execution path via comparative evaluation."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "google-genai>=2.10.0",
     "openai>=2.44.0",
     "pillow>=12.2.0",
+    "pyautogui>=0.9.54",
 ]
